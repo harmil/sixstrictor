@@ -1,5 +1,4 @@
 use v6;
-use v6;
 
 grammar Python::Core {
     sub indentfail($indent, $expected) {
@@ -8,21 +7,29 @@ grammar Python::Core {
         }
         fail "Outdent";
     }
+    sub summary($s is copy, $max=10) {
+        $s ~~ s:g/\n/\\n/;
+        if $s.chars > $max-3 {
+            $s.substr(0, $max-3) ~ '...';
+        } else {
+            $s;
+        }
+    }
     sub debug($/, $msg) {
-        say "$msg before {$/.postmatch.substr(0,10).subst("\n", "")}";
+        say "$msg reading '{summary($/.postmatch)}'";
     }
     my $cur-ind = '';
     token ws { <!ww> [ "\\" \n | ' ' ]* }
     rule TOP {^[<statement> {$cur-ind eq ''}]* $}
     rule statement {[' '*\n]*:<set-indent>:{debug($/,"Before before")}<!before ' '>{debug($/,"Indent for new statement")}<statement-body> [\n|<before $>]}
     rule statement-body {<blocklike> |<expr> }
-    rule blocklike {<blocklike-intro>{debug($/,"Block intro matched")} ':' \n{debug($/,"End of block intro matched")}<statement>{debug($/."First statement of block matched")}<continuing-statement>*}
+    rule blocklike {<blocklike-intro>{debug($/,"Block intro matched")} ':'{debug($/,"End of block intro matched")} \n<statement>{debug($/,"First statement of block matched")}<continuing-statement>*}
     rule blocklike-intro {<function-intro>|<conditional-intro>|<class-intro>}
     rule conditional-intro {<conditional-keyword> [<expr> || {fail "$/<conditional-keyword> expr"}] }
     token conditional-keyword { 'if' | 'while' }
     rule function-intro { 'TODO' }
     rule class-intro { 'TODO' }
-    rule continuing-statement {<?before <indent>\S{ $<indent> eq $cur-ind or indentfail($cur-ind) }>[<statement> || {fail "Statement parse failed" }]}
+    rule continuing-statement {<?before <indent>\S{ debug($/, "cur-ind '$cur-ind' in continuing statement"); $<indent> eq $cur-ind or indentfail($cur-ind) }>[<statement> || {fail "Statement parse failed" }]}
     rule expr { <term> } # TODO
     rule term { '(' <expr> ')' | <number> | <string> | <value-keyword> }
     token number { {debug($/, "match number?")} \d+ {debug($/,"Number $/ matched") } } # TODO
@@ -31,7 +38,7 @@ grammar Python::Core {
     token raw-marker { 'r' }
     token quote { '"""' | "'''" | '"' | "'" }
     token value-keyword { 'True' | 'False' | 'None' }
-    token set-indent { :our $cur-ind = <indent> }
+    token set-indent { <after ^|\n> let $cur-ind = <indent> }
     token indent { ' '* }
 }
 
