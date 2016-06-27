@@ -21,19 +21,21 @@ grammar Python::Core {
     token ws { <!ww> [ "\\" \n | ' ' ]* | ' '* '#' <-[\n]>*: }
 
     regex TOP {^
+	{ say "evaluating program:\n---\n{$/.orig}\n---" }
         <blank>*:
         [
-            <before \S><block> $ ||
+            <before \S> <block> $ ||
             <before ' '> {
                 debug($/, "TOP indent");fail "Unexpected indent"
-            }]
+            }
+        ]
     }
     regex block {
-        <blank>* (<indent>||'') <statement>: <.ws>
-        {debug($/,"First statement '{summary($<statement>)}'")}
+        <.blank>* (<indent>||'') <statement>:
+        {debug($/,"Block starts '{summary($<statement>)}'")}
         {} # For getting around <$0> bug
         [
-            <blank>+
+            <.blank>* <after \n>
             <?{
                 # Due to:
                 #   bug #128492: <$0> does not work for empty match
@@ -44,15 +46,15 @@ grammar Python::Core {
                 my $ofrom = $0.from // 0;
                 my $oto = $0.to // 0;
                 my $len = $oto - $ofrom;
-                my $orig := $0.orig || '';
+                my $orig := $0.orig // '';
                 my $found := $next.substr(0,$len);
                 my $template := $orig.substr($ofrom,$len);
                 $found eq $template and (
                     $next.chars == $found.chars or
                         $next.substr($len,1) ne ' ');
-            }><.indent>
+            }> <.indent>
             <statement>:
-            {debug($/,"Secondary statement '{summary($<statement>[1])}'")}
+            {debug($/,"Block continues '{summary($<statement>[1])}'")}
         ]*
         <.ws> <.blank>*
     }
@@ -97,7 +99,7 @@ use Test;
 my $code-examples = [
     'simple statement' => "True",
     'indent cascade' => "if 1:\n    True\n    if 0:\n        False\n",
-    'outdent' => "if 1:\n    True\n    if 0:\n        False\nTrue\n",
+    'outdent' => "if 1:\n    True\n    if 0:\n        False\n3\n",
     'comment' => "True # Truth",
 ];
 
