@@ -64,7 +64,9 @@ grammar Python::Core {
         ]*
         <.ws> <.blank>*
     }
-    rule statement {<blocklike> |<expr> <before \n|$>}
+    rule statement {<blocklike> |[<expr>|<special-stmt>] <before \n|$>}
+    rule special-stmt { 'pass' | <print-stmt> }
+    rule print-stmt { 'print' [ <expr> +% ',' ] (','?) }
     regex blocklike { <blocklike-intro> <.ws> ':' <.ws> \n <block> }
     rule blocklike-intro {<function-intro>|<conditional-intro>|<class-intro>}
     regex conditional-intro {
@@ -80,7 +82,9 @@ grammar Python::Core {
         [ '*' ** {1..2} ] <ident> | <ident> <param-default>?
     }
     token param-default { '=' <.ws> <expr> }
-    rule class-intro { 'TODO' }
+    rule class-intro { 'class' <ident>['(' <class-signature> ')']? }
+    rule class-signature { <variable> +% ',' }
+    token variable { <ident>+% '.' }
     rule expr { <term> } # TODO
     rule term { '(' <expr> ')' | <number> | <string> | <value-keyword> }
     token number { \d+ } # TODO
@@ -122,6 +126,8 @@ my $code-examples = [
     'comment' => "True # Truth",
     'quotes' => qq{'''a'''\n"""b"""\n'c'\n"d"\n},
     'function' => "def foo(a, b, c=1, **kwargs):\n    True\n",
+    'basic_class' => "class A:\n    pass\n",
+    'meaty_class' => "class A(object):\n    def foo(self, i):\n        pass",
 ];
 
 plan($code-examples.elems);
