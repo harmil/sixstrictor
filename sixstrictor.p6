@@ -1,55 +1,83 @@
 use v6;
 
+sub summary($s is copy, $max=20) {
+    $s ~~ s:g/\n/\\n/;
+    if $s.chars > $max-3 {
+        $s.substr(0, $max-3) ~ '...';
+    } else {
+        $s;
+    }
+}
+
 grammar Python::Core {
-    sub indentfail($indent, $expected) {
-        if $indent.size > $expected.size {
-            die "Unexpected indent";
-        }
-        fail "Outdent";
-    }
-    sub summary($s is copy, $max=10) {
-        $s ~~ s:g/\n/\\n/;
-        if $s.chars > $max-3 {
-            $s.substr(0, $max-3) ~ '...';
-        } else {
-            $s;
-        }
-    }
     sub debug($/, $msg) {
         say "$msg reading '{summary($/.postmatch)}'";
     }
-    my $cur-ind = Nil;
-    my @ind-stack;
-    sub set-ind($s) {
-        !$cur-ind.defined or $s.chars != $cur-ind.chars or return False;
-        @ind-stack.push($cur-ind);
-        $cur-ind = $s;
-        return True;
+
+    sub err($/, $key) {
+        "<$key>/{$/{$key}}: parse failure at '{summary($/.postmatch)}'";
     }
-    sub pop-ind {
-        $cur-ind = @ind-stack.pop;
+
+    token ws { <!ww> [ "\\" \n | ' ' ]* | ' '* '#' <-[\n]>*: }
+
+    regex TOP {^
+        <blank>*:
+        [
+            <before \S><block> $ ||
+            <before ' '> {
+                debug($/, "TOP indent");fail "Unexpected indent"
+            }]
     }
-    token ws { <!ww> [ "\\" \n | ' ' ]* | '#' <-[\n]>*: }
-    rule TOP {^{debug($/,"moo")}[<statement> {$cur-ind eq ''}]* $}
-    rule statement {[ \n]*<set-indent>:<statement-body> [\n|<before $>]}
-    rule statement-body {<blocklike> |<expr> }
-    rule blocklike {<blocklike-intro> ':': \n<statement><continuing-statement>*{pop-ind}}
+    regex block {
+        <blank>* (<indent>||'') <statement>: <.ws>
+        {debug($/,"First statement '{summary($<statement>)}'")}
+        {} # For getting around <$0> bug
+        [
+            <blank>+
+            <?{
+                # Due to:
+                #   bug #128492: <$0> does not work for empty match
+                # we must do this manually, but once that bug is fixed,
+                # this and the following <indent> can be removed and
+                # replaced with <$0>
+                my $next := $/.postmatch;
+                my $ofrom = $0.from // 0;
+                my $oto = $0.to // 0;
+                my $len = $oto - $ofrom;
+                my $orig := $0.orig || '';
+                my $found := $next.substr(0,$len);
+                my $template := $orig.substr($ofrom,$len);
+                $found eq $template and (
+                    $next.chars == $found.chars or
+                        $next.substr($len,1) ne ' ');
+            }><.indent>
+            <statement>:
+            {debug($/,"Secondary statement '{summary($<statement>[1])}'")}
+        ]*
+        <.ws> <.blank>*
+    }
+    rule statement {<blocklike> |<expr> <before \n|$>}
+    rule blocklike {<blocklike-intro> ':': \n<block>}
     rule blocklike-intro {<function-intro>|<conditional-intro>|<class-intro>}
-    rule conditional-intro {<conditional-keyword> [<expr> || {fail "$/<conditional-keyword> expr"}] }
+    regex conditional-intro {
+        <conditional-keyword>
+        <.ws>
+        [<expr> || {fail err($/, 'conditional-keyword')}]
+        <.ws>
+    }
     token conditional-keyword { 'if' | 'while' }
     rule function-intro { 'TODO' }
     rule class-intro { 'TODO' }
-    rule continuing-statement {<indent>: <?{$<indent>.chars == $cur-ind.chars}>[<statement-body> || {fail "Statement parse failed" }]}
     rule expr { <term> } # TODO
     rule term { '(' <expr> ')' | <number> | <string> | <value-keyword> }
     token number { \d+ } # TODO
-    regex string { <unicode-marker>? <raw-marker>? <quote> (.*?) <quote> {$<quote>[0] eq $<quote>[1] or fail} }
+    token string { <unicode-marker>? <raw-marker>? (<quote>): (.*?) <!after '\\'> {True} <$0> }
     token unicode-marker { 'u' }
     token raw-marker { 'r' }
     token quote { '"""' | "'''" | '"' | "'" }
     token value-keyword { 'True' | 'False' | 'None' }
-    token set-indent { <after ^|\n> <indent> <?{set-ind $<indent>}> }
     token indent { ' '* }
+    rule blank { \n}
 }
 
 class Pyton::Ast {
@@ -67,6 +95,7 @@ class Python::Core::Actions {
 use Test;
 
 my $code-examples = [
+    'simple statement' => "True",
     'indent cascade' => "if 1:\n    True\n    if 0:\n        False\n",
     'outdent' => "if 1:\n    True\n    if 0:\n        False\nTrue\n",
     'comment' => "True # Truth",
@@ -77,6 +106,7 @@ plan($code-examples.elems);
 for |$code-examples -> $test {
     my $code = $test.value;
     my $name = $test.key;
+    #say "Test '$name': {summary($code)}";
     simple-parse($code, $name);
 }
 
