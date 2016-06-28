@@ -188,6 +188,18 @@ my $code-examples = [
     'newline-in-expr' => qq{if (\n1):\n    pass\n},
 ];
 
+if @*ARGS {
+    my %ex = |$code-examples;
+    my @todo;
+    for @*ARGS -> $name {
+        if %ex{$name}:exists {
+            @todo.push: $name => %ex{$name};
+        } else {
+            die "No such test '$name'";
+        }
+    }
+    $code-examples := @todo;
+}
 plan($code-examples.elems);
 
 for |$code-examples -> $test {
