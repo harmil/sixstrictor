@@ -69,7 +69,8 @@ grammar Python::Core {
         ]*
         <.ws> <.blank>*
     }
-    rule statement {<blocklike> |[<expr>|<special-stmt>] <before \n|$>}
+    rule statement {<blocklike> |[<stmt-expr>|<special-stmt>] <before \n|$>}
+    rule stmt-expr { <assignment> | <expr> }
     rule special-stmt { 'pass' | <print-stmt> }
     rule print-stmt { 'print' [ <expr> +% ',' ] (','?) }
     regex blocklike { <blocklike-intro> <.ws> ':' <.ws> \n <block> }
@@ -93,6 +94,15 @@ grammar Python::Core {
     token param-default { '=' <.ws> <expr> }
     rule class-intro { 'class' <ident>['(' <class-signature> ')']? }
     rule class-signature { <variable> +% ',' }
+    rule assignment { [ <target-list> '=' ]+ <expression-list> }
+    rule target-list { <target> *% ',' ','? }
+    rule target {
+        <variable> |
+        '(' ~ ')' <target-list> |
+        '[' ~ ']' <target-list>
+        # TODO subscript and slice
+    }
+    rule expression-list { <expr> +% ',' }
     rule expr { <expr12> | <lambda> }
     rule expr12 { <expr11> +% 'or' }
     rule expr11 { <expr10> +% 'and' }
@@ -163,6 +173,7 @@ grammar Python::Core {
     regex string {
         <unicode-marker>?
         <raw-marker>?
+        # TODO Other markers
         <quote>
         #{debug($/, "Started quote")}
         [ '\\' . | <-[\\]> ]*?
@@ -213,6 +224,8 @@ my $code-examples = [
     'floats' => '(10.0, 10., .1, 1e10, 10.0e-10, 0e0)',
     'imaginaries' => '(1.0j, 1.j, 1j, .1j, 1e10j, 1.1e-10j)',
     'trivial-imaginary' => '1j',
+    'trivial-assignment' => 'a = b',
+    'list-assignment' => 'a,b,c = 1,2,3',
 ];
 
 if @*ARGS {
