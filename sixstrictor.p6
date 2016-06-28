@@ -88,20 +88,18 @@ grammar Python::Core {
     token conditional-keyword { 'if' | 'while' }
     rule function-intro {'def' <ident>'(' <function-signature> ')' }
     rule function-signature { <function-param> *% ',' }
-    token function-param {
-        [ '*' ** {1..2} ] <ident> | <ident> <param-default>?
-    }
+    token function-param { <param-prefix><ident> | <ident> <param-default>? }
     token param-default { '=' <.ws> <expr> }
     rule class-intro { 'class' <ident>['(' <class-signature> ')']? }
     rule class-signature { <variable> +% ',' }
     rule assignment { [ <target-list> '=' ]+ <expression-list> }
     rule target-list { <target> *% ',' ','? }
     rule target {
-        <variable> |
-        '(' ~ ')' <target-list> |
-        '[' ~ ']' <target-list>
-        # TODO subscript and slice
+        <variable><sliceish>? |
+        '(' ~ ')' <nest-target-list> |
+        '[' ~ ']' <nest-target-list>
     }
+    rule nest-target-list { :temp $space = 'nest'; <target-list> }
     rule expression-list { <expr> +% ',' }
     rule expr { <expr12> | <lambda> }
     rule expr12 { <expr11> +% 'or' }
@@ -124,7 +122,7 @@ grammar Python::Core {
     rule expr02 { <op02>* <expr01> }
     token op02 { '+' | '-' | '~' }
     rule expr01 { <expr00> +% '**' }
-    rule expr00 { <term>['(' <invocation-parameters> ')']? }
+    rule expr00 { <term><postfix-operation>* }
     rule term {
         '(' <nest-expr> ')' | <variable> | <literal>
     }
@@ -134,11 +132,19 @@ grammar Python::Core {
     rule literal {
         <number> | <string> | <value-keyword> | <collection>
     }
-    rule invocation-parameters { <invocation-parameter> *% ',' }
-    rule invocation-parameter {
-        (['*'**{1..2}]?)<nest-expr> |
-        <ident>'=' <nest-expr>
+    regex postfix-operation { <invocation> | <sliceish> }
+    regex invocation {'(' <invocation-parameters> ')'}
+    rule invocation-parameters {
+        :temp $space = 'nest';
+        <invocation-parameter> *% ','
     }
+    rule invocation-parameter {
+        <param-prefix>?<expr> |
+        <ident>'=' <expr>
+    }
+    token param-prefix { '*' | '**' }
+    rule sliceish {'[' ~ ']' <slice-expr>}
+    rule slice-expr { <nest-expr> [ ':': <nest-expr> ]? }
     rule collection { <literal-list> | <literal-dict-set> | <literal-tuple> }
     rule literal-list { '[' ~ ']' ( <nest-expr> *% ',' ','?) }
     rule literal-dict-set { '{' ~ '}' <dict-set-items> }
@@ -226,6 +232,12 @@ my $code-examples = [
     'trivial-imaginary' => '1j',
     'trivial-assignment' => 'a = b',
     'list-assignment' => 'a,b,c = 1,2,3',
+    'index' => 'a[10]',
+    'dict-index' => 'a["pie"]',
+    'slice' => 'a[0:10]',
+    'slice-assign' => 'a[0:10] = "pie"',
+    'slice-newline' => "a[\n0 :\n10]",
+    'multi-line-string' => "'this\nis\na\nstring'",
 ];
 
 if @*ARGS {
