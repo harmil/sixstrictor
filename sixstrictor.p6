@@ -68,7 +68,11 @@ grammar Python::Core {
     rule special-stmt { 'pass' | <print-stmt> }
     rule print-stmt { 'print' [ <expr> +% ',' ] (','?) }
     regex blocklike { <blocklike-intro> <.ws> ':' <.ws> \n <block> }
-    rule blocklike-intro {<function-intro>|<conditional-intro>|<class-intro>}
+    regex blocklike-intro {
+        <function-intro> | <conditional-intro> |
+        <class-intro> | <for-intro>
+    }
+    rule for-intro {'for' <variable> 'in' <expr>}
     regex conditional-intro {
         <conditional-keyword>
         <.ws>
@@ -84,10 +88,43 @@ grammar Python::Core {
     token param-default { '=' <.ws> <expr> }
     rule class-intro { 'class' <ident>['(' <class-signature> ')']? }
     rule class-signature { <variable> +% ',' }
+    rule expr { <expr12> | <lambda> }
+    rule expr12 { <expr11> +% 'or' }
+    rule expr11 { <expr10> +% 'and' }
+    rule expr10 { ('not' )* <expr09> }
+    rule expr09 { <expr08> +% <op09> }
+    token op09 {
+        '==' | '!=' | '>' '='? | '<' '='? | 'is'[<.ws>'not']? |
+        ['not'<.ws>]? 'in'
+    }
+    rule expr08 { <expr07> +% '|' }
+    rule expr07 { <expr06> +% '^' }
+    rule expr06 { <expr05> +% '&' }
+    rule expr05 { <expr04> +% <op05> }
+    token op05 { '<<' | '>>' }
+    rule expr04 { <expr03> +% <op04> }
+    token op04 { '+' | '-' }
+    rule expr03 { <expr02> +% <op03> }
+    token op03 { '*' | '/' '/'? | '%' }
+    rule expr02 { <op02>* <expr01> }
+    token op02 { '+' | '-' | '~' }
+    rule expr01 { <term> +% '**' }
+    rule term {
+        '(' <expr> ')' | <variable> | <literal>
+    }
+    rule literal {
+        <number> | <string> | <value-keyword> | <collection>
+    }
+    rule collection { <literal-list> | <literal-dict-set> | <literal-tuple> }
+    rule literal-list { '[' ~ ']' ( <expr> *% ',' ','?) }
+    rule literal-dict-set { '{' ~ '}' <dict-set-items> }
+    rule literal-tuple { '(' ~ ')' ( <expr> *% ',' ','?) }
+    rule dict-set-items { <dict-set-item> *% ',' }
+    rule dict-set-item { <expr> ( ':' <expr> )? }
+    rule lambda { 'lambda' <function-param> *% ',' ':' <expr12> }
     token variable { <ident>+% '.' }
-    rule expr { <term> } # TODO
-    rule term { '(' <expr> ')' | <number> | <string> | <value-keyword> }
     token number { \d+ } # TODO
+
     regex string {
         <unicode-marker>?
         <raw-marker>?
@@ -128,6 +165,11 @@ my $code-examples = [
     'function' => "def foo(a, b, c=1, **kwargs):\n    True\n",
     'basic_class' => "class A:\n    pass\n",
     'meaty_class' => "class A(object):\n    def foo(self, i):\n        pass",
+    'expr' => '10 * 3**4 + 20 - ( 5//3 ^ 6 )',
+    'lambda' => 'lambda x,y: x+y',
+    'list' => '[ 1, 2, 1+2, [4, 5], ]',
+    'dict' => '{ "a": 1, "b": 2, "c": 3 }',
+    'set' => '{ 1, 2, 3, 4, 5 }',
 ];
 
 plan($code-examples.elems);
