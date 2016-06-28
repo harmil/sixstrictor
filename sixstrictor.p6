@@ -35,10 +35,15 @@ grammar Python::Core {
         matcher($found, $template, $len, $next);
     }
 
-    token ws { <!ww> [ "\\" \n | ' ' ]* | ' '* '#' <-[\n]>*: }
+    our $space;
+
+    token spacer { ' ' | <?{$space eq 'nest'}> \n }
+
+    token ws { <!ww> [ "\\" \n | <spacer> ]* | ' '* '#' <-[\n]>*: }
 
     regex TOP {^
-	#{ say "evaluating program:\n---\n{$/.orig}\n---" }
+        :temp $space = 'top';
+        #{ say "evaluating program:\n---\n{$/.orig}\n---" }
         <blank>*:
         [
             <before \S> <block> $ ||
@@ -108,19 +113,28 @@ grammar Python::Core {
     token op03 { '*' | '/' '/'? | '%' }
     rule expr02 { <op02>* <expr01> }
     token op02 { '+' | '-' | '~' }
-    rule expr01 { <term> +% '**' }
+    rule expr01 { <expr00> +% '**' }
+    rule expr00 { <term>['(' <invocation-parameters> ')']? }
     rule term {
-        '(' <expr> ')' | <variable> | <literal>
+        '(' <nest-expr> ')' | <variable> | <literal>
+    }
+    rule nest-expr {
+        :temp $space = 'nest'; <expr>
     }
     rule literal {
         <number> | <string> | <value-keyword> | <collection>
     }
+    rule invocation-parameters { <invocation-parameter> *% ',' }
+    rule invocation-parameter {
+        (['*'**{1..2}]?)<nest-expr> |
+        <ident>'=' <nest-expr>
+    }
     rule collection { <literal-list> | <literal-dict-set> | <literal-tuple> }
-    rule literal-list { '[' ~ ']' ( <expr> *% ',' ','?) }
+    rule literal-list { '[' ~ ']' ( <nest-expr> *% ',' ','?) }
     rule literal-dict-set { '{' ~ '}' <dict-set-items> }
-    rule literal-tuple { '(' ~ ')' ( <expr> *% ',' ','?) }
+    rule literal-tuple { '(' ~ ')' ( <nest-expr> *% ',' ','?) }
     rule dict-set-items { <dict-set-item> *% ',' }
-    rule dict-set-item { <expr> ( ':' <expr> )? }
+    rule dict-set-item { <nest-expr> ( ':' <nest-expr> )? }
     rule lambda { 'lambda' <function-param> *% ',' ':' <expr12> }
     token variable { <ident>+% '.' }
     token number { \d+ } # TODO
@@ -170,6 +184,8 @@ my $code-examples = [
     'list' => '[ 1, 2, 1+2, [4, 5], ]',
     'dict' => '{ "a": 1, "b": 2, "c": 3 }',
     'set' => '{ 1, 2, 3, 4, 5 }',
+    'function-call' => qq{def foo(a,b,c):\n     pass\nfoo(1,b=2,**{'c':3})\n},
+    'newline-in-expr' => qq{if (\n1):\n    pass\n},
 ];
 
 plan($code-examples.elems);
