@@ -137,7 +137,28 @@ grammar Python::Core {
     rule dict-set-item { <nest-expr> ( ':' <nest-expr> )? }
     rule lambda { 'lambda' <function-param> *% ',' ':' <expr12> }
     token variable { <ident>+% '.' }
-    token number { \d+ } # TODO
+    token number { <literal-integer> | <literal-float> | <literal-imaginary> }
+    token literal-integer {
+        [
+            <binary-integer> |
+            <octal-integer> |
+            <decimal-integer> |
+            <hexidecimal-integer>
+        ] <longsuffix>?
+    }
+    token binary-integer { '0' <[bB]> <[0..1]>+ }
+    token octal-integer { '0' <[oO]>? <[0..7]>+ }
+    token decimal-integer { '0' | <!before '0'> <[0..9]>+ }
+    token hexidecimal-integer { '0' <[xX]> <[0..9]+[a..f]+[A..F]>+ }
+    token longsuffix { 'l' | 'L' }
+    token literal-float { <point-float> | <exponent-float> }
+    token point-float {
+        <float-intpart>? '.' <float-intpart> | <float-intpart> '.'
+    }
+    token float-intpart { <[0..9]>+ }
+    token exponent-float { [ <float-intpart> | <point-float> ] <exponent> }
+    token exponent { (<[eE]>) (<[+-]>)? <float-intpart> }
+    token literal-imaginary { [<literal-float> | <float-intpart>] <[jJ]> }
 
     regex string {
         <unicode-marker>?
@@ -186,6 +207,12 @@ my $code-examples = [
     'set' => '{ 1, 2, 3, 4, 5 }',
     'function-call' => qq{def foo(a,b,c):\n     pass\nfoo(1,b=2,**{'c':3})\n},
     'newline-in-expr' => qq{if (\n1):\n    pass\n},
+    'trivial-integer' => '10',
+    'integers' => '(1, 01, 0b1, 0xa9b2, 100L)',
+    'trivial-float' => '1.0',
+    'floats' => '(10.0, 10., .1, 1e10, 10.0e-10, 0e0)',
+    'imaginaries' => '(1.0j, 1.j, 1j, .1j, 1e10j, 1.1e-10j)',
+    'trivial-imaginary' => '1j',
 ];
 
 if @*ARGS {
