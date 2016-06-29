@@ -12,13 +12,14 @@ sub summary($s is copy, $max=20) {
 }
 
 grammar Python::Core {
-    sub debug($/, $msg) {
-        say "$msg reading '{summary($/.postmatch)}'";
-    }
+    #sub debug($/, $msg) {
+    #   say "$msg reading '{summary($/.postmatch)}'";
+    #}
 
     sub err($/, $key) {
         "<$key>/{$/{$key}}: parse failure at '{summary($/.postmatch)}'";
     }
+
     sub do_match_on($/, $prev, &matcher) {
         # Due to:
         #   bug #128492: <$0> does not work for empty match
@@ -35,10 +36,19 @@ grammar Python::Core {
         matcher($found, $template, $len, $next);
     }
 
+    # Whitespace is special in Perl6 rules. In "rule" delclarations,
+    # all whitespace in the rule implicitly matches as <.ws> while
+    # in regex and token declarations, whitepaces is simply ignored.
+    #
+    # Our <ws> has two modes: top and nest. Top mode matches
+    # backslashed newlines, spaces and word-boundaries. It also
+    # matches comments. But in nest mode it also matches newlines.
+    # This gives us the Python behavior of allowing newlines in
+    # statements as long as it's within matching backeting
+    # tokens (e.g. parens, brackets, braces)
     our $space;
 
     token spacer { ' ' | <?{$space eq 'nest'}> \n }
-
     token ws { <!ww> [ "\\" \n | <spacer> ]* | ' '* '#' <-[\n]>*: }
 
     regex TOP {^
@@ -47,14 +57,11 @@ grammar Python::Core {
         <blank>*:
         [
             <before \S> <block> $ ||
-            <before ' '>
-            # { debug($/, "TOP indent");fail "Unexpected indent" }
+            <before ' '> { fail "Unexpected indent" }
         ]
     }
     regex block {
         <.blank>* (<indent>||'') <statement>:
-        #{debug($/,"Block starts '{summary($<statement>)}'")}
-        {} # For getting around <$0> bug
         [
             <.blank>* <after \n>
             <?{
@@ -65,7 +72,6 @@ grammar Python::Core {
                 });
             }> <.indent>
             <statement>:
-            #{debug($/,"Block continues '{summary($<statement>[1])}'")}
         ]*
         <.ws> <.blank>*
     }
@@ -181,7 +187,6 @@ grammar Python::Core {
         <raw-marker>?
         # TODO Other markers
         <quote>
-        #{debug($/, "Started quote")}
         [ '\\' . | <-[\\]> ]*?
         <quote>
         <?{~$<quote>[0] eq ~$<quote>[1] }>
