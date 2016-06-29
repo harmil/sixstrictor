@@ -1,0 +1,12 @@
+{   "perl"        : "6",
+    "name"        : "Sixstrictor::Parser",
+    "version"     : "0.0.1",
+    "description" : "Perl 6 grammar for parsing Python 2",
+    "depends"     : [],
+    "source-url"  : "git://github.com/harmil/sixstrictor.git",
+    "provides"    : {
+        "Sixstrictor::Grammar" : "lib/Sixstrictor/Grammar.pm",
+        "Sixstrictor::Grammar::Actions" : "lib/Sixstrictor/Grammar/Actions.pm",
+        "Sixstrictor::Grammar::AST" : "lib/Sixstrictor/Grammar/AST.pm"
+    }
+}
