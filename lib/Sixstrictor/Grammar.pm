@@ -1,3 +1,7 @@
+#
+# Python grammar. Comments with [Lexi] are referring to
+# https://docs.python.org/2/reference/lexical_analysis.html
+#
 use v6;
 
 #use Grammar::Tracer;
@@ -36,6 +40,17 @@ grammar Sixstrictor::Grammar {
         matcher($found, $template, $len, $next);
     }
 
+    our $tab-size = 8; # Per 2.7 syntax reference
+
+    our sub expand-tab($prematch) {
+        # Takes a string that ends in a tab and returns
+        # the equivalent number of spaces for that tab, based on its
+        # column apperance.
+        $prematch ~~ /[\t|^^](<-[\n\t]>*)\t$/;
+        my $len = ($0.to//0) - ($0.from//0);
+        return ' ' x ($tab-size - $len % $tab-size); # WTF Unicode!
+    }
+
     # Whitespace is special in Perl6 rules. In "rule" delclarations,
     # all whitespace in the rule implicitly matches as <.ws> while
     # in regex and token declarations, whitepaces is simply ignored.
@@ -48,8 +63,16 @@ grammar Sixstrictor::Grammar {
     # tokens (e.g. parens, brackets, braces)
     our $space;
 
-    token spacer { ' ' | <?{$space eq 'nest'}> \n }
-    token ws { <!ww> [ "\\" \n | <spacer> ]* | ' '* '#' <-[\n]>*: }
+    token tab { "\t" { make expand-tab($/.prematch) } }
+    token spacer {
+        # "Except at the beginning of a logical line or in string
+        # literals, the whitespace characters space, tab and
+        # formfeed can be used interchangeably to separate tokens."
+        # - [Lexi]
+        ' ' | "\f" | <tab> |
+        <?{$space eq 'nest'}> \n
+    }
+    token ws { <!ww> [ "\\" \n | <spacer> ]* | ' '* '#' \N*: }
 
     regex TOP {^
         :temp $space = 'top';
@@ -139,7 +162,7 @@ grammar Sixstrictor::Grammar {
         <number> | <string> | <value-keyword> | <collection>
     }
     regex postfix-operation { <invocation> | <sliceish> }
-    regex invocation {'(' <invocation-parameters> ')'}
+    rule invocation { '(' <invocation-parameters> ')' }
     rule invocation-parameters {
         :temp $space = 'nest';
         <invocation-parameter> *% ','
